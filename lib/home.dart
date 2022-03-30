@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_ml_vision/firebase_ml_vision.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 class Home extends StatefulWidget {
   const Home({Key? key}) : super(key: key);
@@ -14,8 +16,38 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   String result = '';
+  int index = 567;
+  String response = '';
   File? image;
   ImagePicker? imagePicker;
+  List<Book> books = [];
+
+  Future<List<Book>> getAPI() async {
+    result = result.replaceAll("-","");
+    final response = await http.get(Uri.https('www.googleapis.com', '/books/v1/volumes', {
+      'q' : 'isbn:$result','key': 'AIzaSyBKr4CegROMzEzkNTjtEXB_HnsNnhoXBr0'
+    }));
+    var jsonData = jsonDecode(response.body);
+
+    if(response.statusCode == 200 && jsonData['items'][0]['id'] != 'i1lrYuczMUMC'){
+      Book book = Book(jsonData['items'][0]['volumeInfo']['title'],jsonData['items'][0]['volumeInfo']['authors'][0],jsonData['items'][0]['volumeInfo']['industryIdentifiers'][1]['identifier'],jsonData['items'][0]['volumeInfo']['language']);
+      books.add(book);
+      if (kDebugMode) {
+        print(book.title);
+        print(books);
+        print(result);
+        print("booooooks");
+      }
+      return books;
+    }else {
+      if (kDebugMode) {
+        print(books);
+        print("buuuuuks");
+      }
+      return books;
+    }
+
+  }
 
   pickImageFromGallery() async {
     PickedFile pickedFile =
@@ -44,18 +76,31 @@ class _HomeState extends State<Home> {
     VisionText visionText = await recognizer.processImage(firebaseVisionImage);
 
     result = '';
+    index = 567;
 
     setState(() {
-      for (TextBlock block in visionText.blocks) {
-        final String txt = block.text;
-        for (TextLine line in block.lines) {
-          for (TextElement element in line.elements) {
-            result += element.text + " ";
-          }
-        }
-        result += "\n\n";
+      for (TextBlock block in visionText.blocks)
+      {
+        index = visionText.text.indexOf("ISBN");
+        result = visionText.text.substring(index+5,index+22);
       }
+      result += "\n\n";
     });
+
+    // var response = await http.get(Uri.https('www.googleapis.com', '/books/v1/volumes', {
+    //   'q' : 'isbn: '+result,'key': 'AIzaSyBKr4CegROMzEzkNTjtEXB_HnsNnhoXBr0'
+    // }));
+    // var jsonData = jsonDecode(response.body);
+    //
+    // book = Book(jsonData['title'], jsonData['authors'], jsonData['industryIdentifiers'], jsonData['language']);
+    //
+    // if (kDebugMode) {
+    //   print(book);
+    //   print("booooooks");
+    // }
+    // log("TEST: $book");
+
+    // getAPI();
   }
 
   @override
@@ -69,78 +114,70 @@ class _HomeState extends State<Home> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/back.png'), fit: BoxFit.cover
-          ),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(width: 100,),
-
-            Container(
-              height: 280,
-              width: 250,
-              margin: const EdgeInsets.only(top: 70),
-              padding: const EdgeInsets.only(left: 28, bottom: 5, right: 18),
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    result,
-                    style: const TextStyle(fontSize: 16),
-                    textAlign: TextAlign.justify,
-                  ),
-                ),
-              ),
-              decoration: const BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('assets/note.png'),
-                  fit: BoxFit.cover
-                )
-              ),
+      body: Column(
+        children: [
+          Expanded(
+            child: FutureBuilder(
+              future: getAPI(),
+              builder: (context,AsyncSnapshot snapshot){
+                if(books.isEmpty){
+                  return Container(
+                    height: 280,
+                    child: const Center(
+                      child: Text('Prend une photo'),
+                    ),
+                  );
+                }else{
+                  return ListView.builder(
+                    itemCount: books.length,
+                    itemBuilder: (context, i){
+                      return Center(child: ListTile(title: Text(books[i].title,style: const TextStyle(fontSize: 48)),subtitle: Text(books[i].authors,style: const TextStyle(fontSize: 24)),));
+                    });
+                }
+              },
             ),
+          ),
+          Container(
+            height: 100,
+            child: Stack(
+              children: [
+                // Stack(
+                //   children: [
+                //
+                //     Center(
+                //       child: Image.asset('assets/pin.png', height: 240, width: 240),
+                //     )
+                //   ],
+                // ),
 
-            Container(
-              margin: const EdgeInsets.only(top:20,right: 140),
-              child: Stack(
-                children: [
-                  Stack(
-                    children: [
-
-                      Center(
-                        child: Image.asset('assets/pin.png', height: 240, width: 240),
-                      )
-                    ],
-                  ),
-
-                  Center(
-                    child: TextButton(
-                      onPressed: (){
-                        pickImageFromCamera();
-                      },
-                      onLongPress: (){
-                        pickImageFromGallery();
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 25),
-                        child: image != null
-                          ? Image.file(image!,width: 140,height: 192, fit: BoxFit.fill,)
-                          : Container(
-                          width: 240,
-                          height: 200,
-                          child: const Icon(Icons.camera_enhance_sharp,size: 100,color: Colors.grey,),
-                        ),
+                Center(
+                  child: TextButton(
+                    onPressed: (){
+                      pickImageFromCamera();
+                    },
+                    onLongPress: (){
+                      pickImageFromGallery();
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 25),
+                      child: const SizedBox(
+                        height: 100,
+                        child: Icon(Icons.camera_enhance_sharp,size: 100,color: Colors.grey,),
                       ),
                     ),
-                  )
-                ],
-              ),
-            )
-          ],
-        ),
+                  ),
+                )
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
+}
+
+class Book{
+  String title,authors,isbn,language;
+
+  Book(this.title,this.authors,this.isbn,this.language);
 }
